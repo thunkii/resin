@@ -86,9 +86,6 @@ resonances.config.set('MATRIX_2BODY_ORDER_MAX',25)
 
 #parameters for solex processing    
 solex_files=False
-asteroid='Haumea (system barycenter)'
-largebody='Neptune'
-resstring='7N-12'
 smallfilename='HAUMEA.OUT'
 largefilename='NEPTUNE.OUT'
 outputanim='cache/resin_animation_test.mp4'
@@ -96,6 +93,9 @@ outputresangle='cache/resangle.png'
 precessionrate=(2*np.pi)/(365.25*25771.57534)
 
 #parameters for rebound processing
+asteroid='Haumea (system barycenter)'
+largebody='Neptune'
+resstring='7N-12'
 rebound=True
 autodetect=True
 years_to_integrate=300000
