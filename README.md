@@ -5,3 +5,5 @@ resin can also take a SOLEX output file and plot that (as long as the output fra
 Some additional output parameters have been added to thunkii/resonances to make resin slightly more practical; use that.
 
 This script is still in an alpha state and a lot of things might not work.
+
+Original idea, technical development, test cases, and help and advice were contributed by Daniel Bamberger.
