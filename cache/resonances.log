@@ -1,3 +1,0 @@
-2025-08-19 01:16:49 INFO: Adding a possible resonance for an asteroid Haumea (system barycenter) - 42.98074839532428, 0.1964403135033027, 0.49232902384500643, 4.205388196681619, 2.1259766847330526, 3.8737148572529696
-2025-08-19 01:17:28 INFO: Animation.save using <class 'matplotlib.animation.FFMpegWriter'>
-2025-08-19 01:17:28 INFO: MovieWriter._run: running command: ffmpeg -f rawvideo -vcodec rawvideo -s 1600x1600 -pix_fmt rgba -framerate 20.0 -loglevel error -i pipe: -vcodec h264 -pix_fmt yuv420p -y cache/resin_animation_test.mp4
