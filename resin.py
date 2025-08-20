@@ -21,8 +21,8 @@ from skyfield.timelib import Timescale
 def get_orbital_elements_from_state(position):
     mu=GM_SUN_Pitjeva_2005_km3_s2
     pos,vel=position.frame_xyz_and_velocity(ecliptic_J2000_frame)
-    pos=pos.km
-    vel=vel.km_per_s
+    pos=pos.km.T
+    vel=vel.km_per_s.T
     radius=np.linalg.norm(pos, axis=1)[:,np.newaxis]
     velocity_radial=np.sum(pos/radius*vel, axis=1)
     #print(velocity_radial)
@@ -84,23 +84,26 @@ resonances.config.set('MATRIX_2BODY_PRIMARY_MAX',25)
 resonances.config.set('MATRIX_2BODY_COEF_MAX',25)
 resonances.config.set('MATRIX_2BODY_ORDER_MAX',25)
 
-#parameters for solex processing    
-solex_files=False
-smallfilename='HAUMEA.OUT'
-largefilename='NEPTUNE.OUT'
-outputanim='cache/resin_animation_test.mp4'
-outputresangle='cache/resangle.png'
-precessionrate=(2*np.pi)/(365.25*25771.57534)
-
-#parameters for rebound processing
+#general parameters
 asteroid='Haumea (system barycenter)'
 largebody='Neptune'
 resstring='7N-12'
+outputanim='cache/resin_animation_test.mp4'
+outputresangle='cache/resangle.png'
+frameinterval=50 #interval between animation frames in ms
+
+#parameters for solex processing    
+solex_files=False
+smallfilename='../HAUMEA.OUT'
+largefilename='../NEPTUNE.OUT'
+precessionrate=(2*np.pi)/(365.25*25771.57534)
+
+#parameters for rebound processing
 rebound=True
 autodetect=True
-years_to_integrate=300000
-start_year=-150000 #in years before config.date, accessible in configuration settings.
-nout=100000
+years_to_integrate=200000
+start_year=-100000 #in years before config.date, accessible in configuration settings.
+nout=100000 #number of plotting timesteps
 
 if rebound==True:
     solex_files=False #both at once makes a mess
@@ -145,7 +148,6 @@ if rebound==True:
 ts = load.timescale()
 small_order, planet1order, planet2order = res_string_to_chunks(resstring)
 
-print(small_order, planet1order)
 #define output params from sim
 
 if rebound==True:
@@ -165,7 +167,7 @@ if rebound==True:
         planetpos1=np.vstack([body2.planetpos1[reslabel][::-1, :],body.planetpos1[reslabel][1:,:]])
         timeobject_s=ts.from_datetime(sim.config.date.astimezone(pytz.UTC))+365.25/(np.pi*2)*np.hstack([sim2.times[::-1],sim.times[1:]])
     else: #just forward
-        bodyX,bodyY,bodyZ,bodyVx,bodyVy,bodyVz,bodylon,bodyvarpi=body.X, body.Y, body.Z, body.Vx, body.Vy, body.Vz, body.longitude, body.varpi
+        bodyX,bodyY,bodyZ,bodyVx,bodyVy,bodyVz,bodylon,bodyvarpi, bodyangles=body.X, body.Y, body.Z, body.Vx, body.Vy, body.Vz, body.longitude, body.varpi, body.angles[reslabel]
         planetpos1=body.planetpos1[reslabel]
         timeobject_s=ts.from_datetime(sim.config.date.astimezone(pytz.UTC))+365.25/(np.pi*2)*sim.times
 
@@ -175,13 +177,13 @@ if solex_files==True: #read the Solex data under the assumption it's heliocentri
     largebody=pd.read_fwf(largefilename,header=3,widths=[15,21,18,18,18,18,18,18,18,18]).rename(columns=lambda x: x.strip())
     timeobject_s=ts.tdb_jd(2451545.0+365.25*smallbody['T##'].to_numpy())
     timeobject_l=ts.tdb_jd(2451545.0+365.25*largebody['T##'].to_numpy())
-    smallbody_position= build_position(smallbody[['X','Y','Z']].to_numpy(),smallbody[['Vx','Vy','Vz']].to_numpy()/149.5978707, t=timeobject_s)
-    largebody_position= build_position(largebody[['X','Y','Z']].to_numpy(),largebody[['Vx','Vy','Vz']].to_numpy()/149.5978707, t=timeobject_l)
+    smallbody_position= build_position(smallbody[['X','Y','Z']].to_numpy().T,smallbody[['Vx','Vy','Vz']].to_numpy().T/149.5978707, t=timeobject_s)
+    largebody_position= build_position(largebody[['X','Y','Z']].to_numpy().T,largebody[['Vx','Vy','Vz']].to_numpy().T/149.5978707, t=timeobject_l)
 
 elif rebound==True: #rebound+resonances provide positions in barycentric ecliptic frame, which is much easier to work with.
     timeobject_l=timeobject_s
-    smallbody_position= Barycentric(np.stack([bodyX,bodyY,bodyZ]).T,np.stack([bodyVx,bodyVy,bodyVz]).T, t=timeobject_s)
-    largebody_position= Barycentric(planetpos1[:,0:3],planetpos1[:,3:6], t=timeobject_l)
+    smallbody_position= Barycentric(np.stack([bodyX,bodyY,bodyZ]),np.stack([bodyVx,bodyVy,bodyVz]),timeobject_s,0)
+    largebody_position= Barycentric(planetpos1[:,0:3].T,planetpos1[:,3:6].T,timeobject_l,0)
 
 else: #uhhh...
     raise NotImplementedError
@@ -194,7 +196,7 @@ n_timesteps=np.shape(largebody_position.t)[0] #number of timesteps can be slight
 #We expect most bodies to have a reasonably small inclination (looking at you, Taowu).
 #v=[1,0,-1]
 
-largebody_u=(largebody_position.xyz.au-np.vstack((np.zeros(n_timesteps),np.zeros(n_timesteps),np.linalg.norm(largebody_position.xyz.au, axis=1))).T)
+largebody_u=(largebody_position.xyz.au-np.vstack((np.zeros(n_timesteps),np.zeros(n_timesteps),np.linalg.norm(largebody_position.xyz.au, axis=0)))).T
 norm_u=np.square(largebody_u).sum(axis=1)
 lu_values=largebody_u
 eye=np.tile(np.identity(3),[n_timesteps,1,1])
@@ -209,16 +211,16 @@ entry_21=-2/norm_u*lu_values[:,2]*lu_values[:,1]-2*(lu_values[:,0]-lu_values[:,2
 entry_22=-2/norm_u*lu_values[:,2]*lu_values[:,2]-1-2*(lu_values[:,0]-lu_values[:,2])/norm_u*lu_values[:,2]
 rotationmatrix1=np.block([[[1+entry_00],[entry_01],[entry_02]],[[entry_10],[1+entry_11],[entry_12]],[[entry_20],[entry_21],[1+entry_22]]]) #rotation 1 into plane
 
-largebody_rotated=mxv(rotationmatrix1, largebody_position.xyz.au.T)
-largebody_velocity=mxv(rotationmatrix1, largebody_position.velocity.m_per_s.T)
+largebody_rotated=mxv(rotationmatrix1, largebody_position.xyz.au)
+largebody_velocity=mxv(rotationmatrix1, largebody_position.velocity.m_per_s)
 gamma=np.arctan2(largebody_velocity[2,:],largebody_velocity[1,:])#roll angle to get velocity vector onto planet plane
 rotationmatrix2=np.block([[[np.ones(n_timesteps)],[np.zeros(n_timesteps)],[np.zeros(n_timesteps)]],[[np.zeros(n_timesteps)],[np.cos(gamma)],[np.sin(gamma)]],[[np.zeros(n_timesteps)],[-np.sin(gamma)],[np.cos(gamma)]]])
-largebody_rotated=pd.DataFrame(mxv(rotationmatrix2, largebody_rotated).T, columns=['X','Y','Z'])
-largebody_velocity=pd.DataFrame(mxv(rotationmatrix2, largebody_velocity).T, columns=['Vx','Vy','Vz'])
+largebody_rotated=mxv(rotationmatrix2, largebody_rotated)
+largebody_velocity=mxv(rotationmatrix2, largebody_velocity)
 
 #now we just need to rotate our small body
-smallbody_rotated=pd.DataFrame(mxv(mxm(rotationmatrix2,rotationmatrix1), smallbody_position.xyz.au.T).T, columns=['X','Y','Z'])
-smallbody_velocity=pd.DataFrame(mxv(mxm(rotationmatrix2,rotationmatrix1), smallbody_position.velocity.m_per_s.T).T, columns=['Vx','Vy','Vz'])
+smallbody_rotated=mxv(mxm(rotationmatrix2,rotationmatrix1), smallbody_position.xyz.au)
+smallbody_velocity=mxv(mxm(rotationmatrix2,rotationmatrix1), smallbody_position.velocity.m_per_s)
 
 smallbody_rotated_position= build_position(smallbody_rotated,smallbody_velocity*86400/149597870700, t=timeobject_s)
 largebody_rotated_position= build_position(largebody_rotated,largebody_velocity*86400/149597870700, t=timeobject_l)
@@ -227,8 +229,8 @@ largebody_rotated_position= build_position(largebody_rotated,largebody_velocity*
 if solex_files==True:
     large_orbels=get_orbital_elements_from_state(largebody_position)
     small_orbels=get_orbital_elements_from_state(smallbody_position)
-    #for a 2 body resonance, res angle is p*lam1-q*lam2-(p-q)*varpi_1
-    resangle=(small_order*(small_orbels['lon'])-planet1order*(large_orbels['lon'])+(-small_order+planet1order)*(np.unwrap(small_orbels['w'])+np.unwrap(small_orbels['Omega'])))%(2*np.pi)
+    #for a 2 body resonance, res angle is (minus) p*lam1-q*lam2-(p-q)*varpi_1
+    resangle=-1*(small_order*(small_orbels['lon'])-planet1order*(large_orbels['lon'])+(-small_order+planet1order)*(np.unwrap(small_orbels['w'])+np.unwrap(small_orbels['Omega'])))%(2*np.pi)
 elif rebound==True:
     resangle=bodyangles #much simpler because we can just get it from resonances.
 
@@ -249,18 +251,18 @@ print('resonance period: '+str(resperiod)+' timesteps, or '+str(restime)+' days.
 #output plot: resonance angle
 fig2, ax2=plt.subplots(figsize=(12,6))
 ax2.set(xlabel='Time (Julian year)',ylabel='Resonance angle (radians)',title='Resonance angle of '+asteroid)
-ax2.plot(largebody_position.t.J, resangle,'o',ms=0.2, color='b')
+ax2.plot(timeobject_s.J, resangle,'o',ms=0.2, color='b')
 fig2.savefig(outputresangle)
 
 #output animation: spirograph 
 plt.style.use('dark_background')
 fig,ax=plt.subplots(figsize=(8,8))
-maxradius=np.max(np.linalg.norm(smallbody_position.xyz.au, axis=1))
+maxradius=np.max(np.linalg.norm(smallbody_position.xyz.au, axis=0))
 ax.set(xlim=[-1.2*maxradius, 1.2*maxradius], ylim=[-1.2*maxradius, 1.2*maxradius], xlabel='X position (AU)', ylabel='Y position (AU)', title='Resonance of '+asteroid)
-smallxpos=smallbody_rotated_position.xyz.au['X'] #just for brevity
-smallypos=smallbody_rotated_position.xyz.au['Y']
-largexpos=largebody_rotated_position.xyz.au['X']
-largeypos=largebody_rotated_position.xyz.au['Y']
+smallxpos=smallbody_rotated_position.position.au[0,:]
+smallypos=smallbody_rotated_position.position.au[1,:]
+largexpos=largebody_rotated_position.position.au[0,:]
+largeypos=largebody_rotated_position.position.au[1,:]
 
 #plot the first frame. We add one more to the line plot so it isn't short of a full circle.
 scat_s=ax.plot(smallxpos[0:int(resperiod)+1],smallypos[0:int(resperiod)+1],lw=0.5, color='yellow')[0]
@@ -285,6 +287,6 @@ def update(frame):
     return (scat_s, scat_l)
 
 
-ani = animation.FuncAnimation(fig=fig, func=update, frames=int(np.floor(n_timesteps/resperiod)), interval=50)
+ani = animation.FuncAnimation(fig=fig, func=update, frames=int(np.floor(n_timesteps/resperiod)), interval=frameinterval)
 ani.save(outputanim)
 plt.show()
