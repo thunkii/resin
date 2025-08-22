@@ -91,6 +91,12 @@ resstring='7N-12'
 outputanim='cache/resin_animation_test.mp4'
 outputresangle='cache/resangle.png'
 frameinterval=50 #interval between animation frames in ms
+scalefunctionname='function' #how should tickmarks be drawn, one of 'linear', 'log', 'symlog', 'asinh', 'logit', 'function', 'functionlog'
+linearwidth=30
+forwardfunction=lambda x: linearwidth*np.sinh(x/linearwidth)
+invfunction= lambda x: linearwidth*np.asinh(x/linearwidth)
+spinangle=np.pi/4 #radians
+figrad=1.1
 
 #parameters for solex processing    
 solex_files=False
@@ -258,16 +264,31 @@ fig2.savefig(outputresangle)
 plt.style.use('dark_background')
 fig,ax=plt.subplots(figsize=(8,8))
 maxradius=np.max(np.linalg.norm(smallbody_position.xyz.au, axis=0))
-ax.set(xlim=[-1.2*maxradius, 1.2*maxradius], ylim=[-1.2*maxradius, 1.2*maxradius], xlabel='X position (AU)', ylabel='Y position (AU)', title='Resonance of '+asteroid)
-smallxpos=smallbody_rotated_position.position.au[0,:]
-smallypos=smallbody_rotated_position.position.au[1,:]
-largexpos=largebody_rotated_position.position.au[0,:]
-largeypos=largebody_rotated_position.position.au[1,:]
+ax.set(xlim=[-figrad*maxradius, figrad*maxradius], ylim=[-figrad*maxradius, figrad*maxradius], xlabel='X position (AU)', ylabel='Y position (AU)', title='Resonance of '+asteroid)
+if scalefunctionname=='linear':
+    pass
+elif scalefunctionname in ['symlog']:
+    ax.set_xscale(scalefunctionname, linthresh=linearwidth)
+    ax.set_yscale(scalefunctionname, linthresh=linearwidth)
+elif scalefunctionname in ['asinh']:
+    ax.set_xscale(scalefunctionname, linear_width=linearwidth)
+    ax.set_yscale(scalefunctionname, linear_width=linearwidth)
+else:
+    ax.set_xscale(scalefunctionname, functions=(
+        forwardfunction,
+        invfunction))
+    ax.set_yscale(scalefunctionname, functions=(
+        forwardfunction,
+        invfunction))
+smallxpos=smallbody_rotated_position.position.au[0,:]*np.cos(spinangle)-smallbody_rotated_position.position.au[1,:]*np.sin(spinangle)
+smallypos=smallbody_rotated_position.position.au[1,:]*np.cos(spinangle)+smallbody_rotated_position.position.au[0,:]*np.sin(spinangle)
+largexpos=largebody_rotated_position.position.au[0,:]*np.cos(spinangle)-largebody_rotated_position.position.au[1,:]*np.sin(spinangle)
+largeypos=largebody_rotated_position.position.au[1,:]*np.cos(spinangle)+largebody_rotated_position.position.au[0,:]*np.sin(spinangle)
 
 #plot the first frame. We add one more to the line plot so it isn't short of a full circle.
 scat_s=ax.plot(smallxpos[0:int(resperiod)+1],smallypos[0:int(resperiod)+1],lw=0.5, color='yellow')[0]
 scat_l=ax.scatter(largexpos[0:int(resperiod)],largeypos[0:int(resperiod)],s=0.5,color='blue')
-date=ax.text(1.2*maxradius,-1.2*maxradius,largebody_position.t[0].tt_strftime('%Y %b %d'),size='large', verticalalignment='bottom', horizontalalignment='right') #in the corner
+date=ax.text(1,0,largebody_position.t[0].tt_strftime('%Y %b %d'),size='large', verticalalignment='bottom', horizontalalignment='right',transform=ax.transAxes) #in the corner
 
 def update(frame):
     # for each frame, update the data stored on each artist.
